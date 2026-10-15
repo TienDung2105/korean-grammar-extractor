@@ -5,4 +5,5 @@ cloudflared.exe
 *.csv
 .DS_Store
 .venv/
+.uv-cache/
 

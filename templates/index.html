@@ -487,7 +487,7 @@
             <div class="folder-input">
                 <input type="text" id="folderPath" placeholder="E:\path\to\json\folder">
             </div>
-            <p style="font-size:11px; color:#64748b; margin-top:6px;">Nhập đường dẫn thư mục chứa file JSON trên máy</p>
+            <p style="font-size:11px; color:#64748b; margin-top:6px;">Đường dẫn chỉ dùng khi chạy trên máy chứa dữ liệu. Khi dùng Render, hãy tải ZIP/JSON lên.</p>
         </div>
 
         <!-- Patterns -->
@@ -811,7 +811,7 @@
             try {
                 data = JSON.parse(text);
             } catch (e) {
-                showToast('Dữ liệu tải lên quá lớn! Với hàng nghìn file JSON, bạn hãy dán đường dẫn thư mục vào ô bên dưới thay vì kéo thả tải lên.', true);
+                showToast('Máy chủ chưa trả về kết quả hợp lệ. Hãy kiểm tra kết nối hoặc thử chia dữ liệu thành các ZIP nhỏ hơn.', true);
                 resetBtn();
                 return;
             }
@@ -841,6 +841,13 @@
             const resp = await fetch(`/api/status/${currentJobId}`);
             const data = await resp.json();
 
+            if (!resp.ok || data.status === 'error') {
+                document.getElementById('progressSection').style.display = 'none';
+                resetBtn();
+                showToast(data.error || 'Không tìm thấy tác vụ. Hãy tải dữ liệu lại.', true);
+                return;
+            }
+
             const pct = data.total_files > 0
                 ? Math.round((data.processed_files / data.total_files) * 100) : 0;
             document.getElementById('progressBar').style.width = pct + '%';
@@ -853,7 +860,8 @@
                 resetBtn();
                 clearFiles(); // Reset toàn bộ file đã chọn để người dùng chọn đợt file tiếp theo
                 showResults(data.stats);
-                showToast(`Hoàn tất! Tìm thấy ${data.stats.total_sentences} câu.`);
+                showToast(`Hoàn tất! Tìm thấy ${data.stats.total_sentences} câu.` +
+                    (data.failed_files ? ` Bỏ qua ${data.failed_files} file JSON lỗi.` : ''));
             } else {
                 setTimeout(pollStatus, 500);
             }
