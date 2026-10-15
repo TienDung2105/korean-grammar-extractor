@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이중 부정 추출기 | Korean Double Negation Extractor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d1b69 100%);
+            padding: 24px 40px;
+            border-bottom: 2px solid #3b82f6;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header h1 span.icon { font-size: 28px; }
+        .header p {
+            color: #94a3b8;
+            margin-top: 6px;
+            font-size: 14px;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+            min-height: calc(100vh - 100px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            padding: 20px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #93c5fd;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 2px dashed #475569;
+            border-radius: 10px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #0f172a;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #3b82f6;
+            background: #1e293b;
+        }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 10px; }
+        .upload-zone p { color: #94a3b8; font-size: 13px; margin-top: 8px; }
+        .upload-zone .highlight { color: #60a5fa; font-weight: 600; }
+        .file-count {
+            margin-top: 10px;
+            padding: 8px 14px;
+            background: #0f172a;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #a5b4fc;
+            display: none;
+        }
+
+        /* Folder input */
+        .folder-input {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .folder-input input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        .folder-input input::placeholder { color: #64748b; }
+        .folder-input input:focus { outline: none; border-color: #3b82f6; }
+
+        /* Pattern selector */
+        .pattern-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 360px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        .pattern-list::-webkit-scrollbar { width: 6px; }
+        .pattern-list::-webkit-scrollbar-track { background: #0f172a; border-radius: 3px; }
+        .pattern-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        .pattern-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #0f172a;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        .pattern-item:hover { border-color: #475569; }
+        .pattern-item.selected {
+            border-color: #3b82f6;
+            background: #1e3a5f;
+        }
+        .pattern-item input[type="checkbox"] {
+            accent-color: #3b82f6;
+            width: 16px; height: 16px;
+        }
+        .pattern-name { font-weight: 600; color: #e2e8f0; }
+        .pattern-desc { font-size: 11px; color: #94a3b8; margin-left: auto; }
+        .custom-tag {
+            background: #047857;
+            color: #a7f3d0;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: auto;
+        }
+        .btn-remove-pattern {
+            background: none;
+            border: none;
+            color: #ef4444;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 6px;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .btn-remove-pattern:hover { color: #f87171; }
+
+        .select-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .select-controls button {
+            padding: 4px 10px;
+            background: none;
+            border: 1px solid #475569;
+            color: #94a3b8;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .select-controls button:hover { border-color: #60a5fa; color: #60a5fa; }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(37,99,235,0.3); }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-download {
+            padding: 10px 20px;
+            background: #059669;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-download:hover { background: #047857; }
+
+        /* Progress */
+        .progress-section {
+            display: none;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: #0f172a;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border-radius: 4px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        .progress-text {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 8px;
+        }
+        .progress-text .filename { color: #60a5fa; }
+
+        /* Main content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .stat-card {
+            background: #1e293b;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        /* Filter tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            padding: 12px 0;
+        }
+        .filter-tab {
+            padding: 6px 14px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 20px;
+            color: #94a3b8;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .filter-tab:hover { border-color: #60a5fa; color: #60a5fa; }
+        .filter-tab.active {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+        .filter-tab .count {
+            background: rgba(255,255,255,0.2);
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        /* Results table */
+        .results-section {
+            display: none;
+        }
+        .table-wrapper {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            overflow: hidden;
+        }
+        .table-header-bar {
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #334155;
+        }
+        .table-header-bar .info {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        .table-header-bar .info strong { color: #e2e8f0; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead { background: #0f172a; }
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #334155;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #1e293b;
+            font-size: 14px;
+        }
+        tr:nth-child(even) { background: rgba(15,23,42,0.5); }
+        tr:hover { background: rgba(59,130,246,0.1); }
+
+        .sentence-cell {
+            max-width: 400px;
+            line-height: 1.6;
+        }
+        .matched-highlight {
+            background: rgba(251,191,36,0.3);
+            color: #fbbf24;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .pattern-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            background: #312e81;
+            color: #a5b4fc;
+            border-radius: 12px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .year-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #1e3a5f;
+            color: #93c5fd;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 16px;
+        }
+        .pagination button {
+            padding: 6px 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .pagination button:hover { border-color: #60a5fa; color: #60a5fa; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination .page-info { color: #94a3b8; font-size: 13px; }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            color: #64748b;
+        }
+        .empty-state .icon { font-size: 60px; margin-bottom: 16px; }
+        .empty-state h3 { color: #94a3b8; margin-bottom: 8px; }
+
+        /* Spinner */
+        .spinner {
+            width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 14px 24px;
+            background: #059669;
+            color: #fff;
+            border-radius: 10px;
+            font-size: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.error { background: #dc2626; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span class="icon">🔍</span> 이중 부정 추출기 <small style="font-size:14px; color:#94a3b8; margin-left:8px">Korean Double Negation Extractor</small></h1>
+    <p>Upload file JSON hoặc nhập đường dẫn thư mục → chọn cấu trúc ngữ pháp → nhận kết quả</p>
+</div>
+
+<div class="container">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <!-- Upload -->
+        <div class="card">
+            <div class="card-title">📁 Dữ liệu đầu vào</div>
+
+            <div class="upload-zone" id="uploadZone">
+                <div class="icon">📤</div>
+                <div>Kéo thả file <span class="highlight">JSON</span> hoặc <span class="highlight">ZIP</span> vào đây</div>
+                <p>hoặc nhấn để chọn file</p>
+            </div>
+            <input type="file" id="fileInput" multiple accept=".json,.zip" style="display:none">
+            <div class="file-count" id="fileCount"></div>
+
+            <div style="text-align:center; color:#475569; font-size:12px; margin:10px 0;">— hoặc —</div>
+
+            <div class="folder-input">
+                <input type="text" id="folderPath" placeholder="E:\path\to\json\folder">
+            </div>
+            <p style="font-size:11px; color:#64748b; margin-top:6px;">Nhập đường dẫn thư mục chứa file JSON trên máy</p>
+        </div>
+
+        <!-- Patterns -->
+        <div class="card">
+            <div class="card-title">📝 Cấu trúc ngữ pháp cần tìm</div>
+
+            <div class="select-controls">
+                <button onclick="selectAll()">Chọn tất cả</button>
+                <button onclick="deselectAll()">Bỏ chọn</button>
+            </div>
+
+            <div class="pattern-list" id="patternList">
+                {% for p in patterns %}
+                <label class="pattern-item selected" data-id="{{ p.id }}">
+                    <input type="checkbox" name="patterns" value="{{ p.id }}" checked>
+                    <span class="pattern-name">{{ p.name }}</span>
+                    <span class="pattern-desc">{{ p.desc }}</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- Custom pattern input -->
+            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #334155;">
+                <div style="font-size: 13px; font-weight: 600; color: #93c5fd; margin-bottom: 6px;">
+                    ➕ Nhập thêm cấu trúc cần tìm:
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="customPatternInput" placeholder="Ví dụ: 는 바람에, (으)면서..." 
+                           style="flex: 1; padding: 8px 10px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; font-size: 13px;"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomPattern();}">
+                    <button type="button" onclick="addCustomPattern()" 
+                            style="padding: 8px 14px; background: #059669; border: none; border-radius: 6px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                        Thêm
+                    </button>
+                </div>
+                <p style="font-size: 11px; color: #64748b; margin-top: 5px;">
+                    Nhập dấu phẩy để thêm nhiều cấu trúc (VD: <code>기 때문에, 는 바람에</code>)
+                </p>
+            </div>
+        </div>
+
+        <!-- Start button -->
+        <button class="btn-primary" id="btnStart" onclick="startProcessing()">
+            🚀 Bắt đầu trích xuất
+        </button>
+
+        <!-- Progress -->
+        <div class="card progress-section" id="progressSection">
+            <div class="card-title">⏳ Đang xử lý...</div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progressText">Đang chuẩn bị...</span><br>
+                <span class="filename" id="progressFile"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <!-- Empty state -->
+        <div class="empty-state" id="emptyState">
+            <div class="icon">📊</div>
+            <h3>Chưa có kết quả</h3>
+            <p>Upload file JSON và nhấn "Bắt đầu trích xuất" để tìm câu phủ định kép</p>
+        </div>
+
+        <!-- Results -->
+        <div class="results-section" id="resultsSection">
+            <!-- Stats -->
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <!-- Filter tabs -->
+            <div class="filter-tabs" id="filterTabs"></div>
+
+            <!-- Download -->
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn-download" onclick="downloadExcel('')">
+                    📥 Tải Excel (tất cả)
+                </button>
+                <button class="btn-download" style="background:#2563eb;" onclick="downloadExcel(currentFilter)" id="btnDownloadFiltered" style="display:none;">
+                    📥 Tải theo bộ lọc
+                </button>
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrapper">
+                <div class="table-header-bar">
+                    <div class="info">Tìm thấy <strong id="totalCount">0</strong> câu</div>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Năm</th>
+                                <th>File</th>
+                                <th>Câu tiếng Hàn</th>
+                                <th>Cấu trúc</th>
+                                <th>Phần khớp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    let currentJobId = null;
+    let currentFilter = '';
+    let currentPage = 1;
+    let collectedFiles = [];
+
+    // ========== Upload Zone ==========
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileCountEl = document.getElementById('fileCount');
+
+    uploadZone.addEventListener('click', () => {
+        fileInput.value = ''; // Luon reset gia tri de chon lai cung 1 file van ban su kien change
+        fileInput.click();
+    });
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        addFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            addFiles(e.target.files);
+        }
+    });
+
+    function clearFiles(e) {
+        if (e) e.stopPropagation();
+        collectedFiles = [];
+        fileInput.value = '';
+        updateFileCount();
+    }
+
+    function addFiles(fileList) {
+        // RESET HOAN TOAN: Chi giu dung danh sach file vua duoc chon trong lan nay
+        collectedFiles = [];
+        for (let i = 0; i < fileList.length; i++) {
+            const f = fileList[i];
+            if (f.name.endsWith('.json') || f.name.endsWith('.zip')) {
+                collectedFiles.push(f);
+            }
+        }
+        updateFileCount();
+    }
+
+    function updateFileCount() {
+        if (collectedFiles.length > 0) {
+            fileCountEl.style.display = 'flex';
+            fileCountEl.style.justifyContent = 'space-between';
+            fileCountEl.style.alignItems = 'center';
+            let text = '';
+            if (collectedFiles.length === 1) {
+                text = `✅ ${collectedFiles[0].name}`;
+            } else if (collectedFiles.length <= 2) {
+                text = `✅ ${collectedFiles.map(f => f.name).join(', ')}`;
+            } else {
+                const jsonCount = collectedFiles.filter(f => f.name.endsWith('.json')).length;
+                const zipCount = collectedFiles.filter(f => f.name.endsWith('.zip')).length;
+                text = `✅ ${collectedFiles.length} file đã chọn`;
+                if (zipCount > 0) text += ` (${zipCount} ZIP)`;
+            }
+            fileCountEl.innerHTML = `
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:230px;" title="${collectedFiles.map(f => f.name).join('\n')}">${text}</span>
+                <button type="button" onclick="clearFiles(event)" style="background:rgba(239,68,68,0.2); border:1px solid #ef4444; color:#fca5a5; font-size:12px; font-weight:600; cursor:pointer; padding:3px 8px; border-radius:5px; margin-left:8px; white-space:nowrap;" title="Bỏ chọn các file này">&times; Bỏ chọn</button>
+            `;
+        } else {
+            fileCountEl.style.display = 'none';
+            fileCountEl.innerHTML = '';
+        }
+    }
+
+    // ========== Pattern Selection ==========
+    document.querySelectorAll('.pattern-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            const cb = item.querySelector('input');
+            cb.checked = !cb.checked;
+            item.classList.toggle('selected', cb.checked);
+        });
+        const cb = item.querySelector('input');
+        cb.addEventListener('change', () => item.classList.toggle('selected', cb.checked));
+    });
+
+    function selectAll() {
+        document.querySelectorAll('.pattern-item').forEach(item => {
+            item.querySelector('input').checked = true;
+            item.classList.add('selected');
+        });
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.pattern-item').forEach(item => {
+            item.querySelector('input').checked = false;
+            item.classList.remove('selected');
+        });
+    }
+
+    const customPatterns = [];
+
+    function addCustomPattern() {
+        const input = document.getElementById('customPatternInput');
+        const val = input.value.trim();
+        if (!val) return;
+
+        // Cho phep nhap nhieu cau truc phan cach boi dau phay hoac enter
+        const items = val.split(/[,，\n]+/).map(s => s.trim()).filter(s => s);
+        let addedCount = 0;
+
+        items.forEach(text => {
+            if (customPatterns.includes(text)) return;
+            customPatterns.push(text);
+            addedCount++;
+
+            const patternList = document.getElementById('patternList');
+            const label = document.createElement('label');
+            label.className = 'pattern-item selected';
+            label.style.borderColor = '#059669';
+            label.setAttribute('data-custom', text);
+            label.innerHTML = `
+                <input type="checkbox" name="custom_patterns" value="${escapeHtml(text)}" checked>
+                <span class="pattern-name">${escapeHtml(text)}</span>
+                <span class="custom-tag">Tự nhập</span>
+                <button type="button" class="btn-remove-pattern" title="Xóa cấu trúc này" onclick="removeCustomPattern(event, '${escapeHtml(text)}')">&times;</button>
+            `;
+            label.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                const cb = label.querySelector('input');
+                cb.checked = !cb.checked;
+                label.classList.toggle('selected', cb.checked);
+            });
+            const cb = label.querySelector('input');
+            cb.addEventListener('change', () => label.classList.toggle('selected', cb.checked));
+
+            patternList.prepend(label);
+        });
+
+        input.value = '';
+        if (addedCount > 0) {
+            showToast(`Đã thêm ${addedCount} cấu trúc mới vào danh sách!`);
+        }
+    }
+
+    function removeCustomPattern(event, text) {
+        event.stopPropagation();
+        const idx = customPatterns.indexOf(text);
+        if (idx !== -1) customPatterns.splice(idx, 1);
+        const item = document.querySelector(`label[data-custom="${text}"]`);
+        if (item) item.remove();
+        showToast(`Đã xoá cấu trúc '${text}'`);
+    }
+
+    // ========== Processing ==========
+    async function startProcessing() {
+        const folderPath = document.getElementById('folderPath').value.trim();
+        if (collectedFiles.length === 0 && !folderPath) {
+            showToast('Hãy upload file hoặc nhập đường dẫn thư mục!', true);
+            return;
+        }
+
+        const selectedPatterns = [];
+        document.querySelectorAll('input[name="patterns"]:checked').forEach(cb => {
+            selectedPatterns.push(cb.value);
+        });
+
+        const selectedCustom = [];
+        document.querySelectorAll('input[name="custom_patterns"]:checked').forEach(cb => {
+            selectedCustom.push(cb.value);
+        });
+
+        if (selectedPatterns.length === 0 && selectedCustom.length === 0) {
+            showToast('Hãy chọn ít nhất 1 cấu trúc ngữ pháp!', true);
+            return;
+        }
+
+        // Build form data
+        const formData = new FormData();
+        for (const f of collectedFiles) {
+            formData.append('files', f);
+        }
+        if (folderPath) {
+            formData.append('folder_path', folderPath);
+        }
+        for (const id of selectedPatterns) {
+            formData.append('patterns[]', id);
+        }
+        for (const cp of selectedCustom) {
+            formData.append('custom_patterns[]', cp);
+        }
+
+        // UI state
+        const btn = document.getElementById('btnStart');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner"></div> Đang gửi dữ liệu...';
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('resultsSection').style.display = 'none';
+
+        try {
+            const resp = await fetch('/api/process', { method: 'POST', body: formData });
+            const text = await resp.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                showToast('Dữ liệu tải lên quá lớn! Với hàng nghìn file JSON, bạn hãy dán đường dẫn thư mục vào ô bên dưới thay vì kéo thả tải lên.', true);
+                resetBtn();
+                return;
+            }
+            if (!resp.ok || data.error) {
+                showToast(data.error || 'Có lỗi xảy ra khi xử lý dữ liệu!', true);
+                resetBtn();
+                return;
+            }
+            currentJobId = data.job_id;
+            btn.innerHTML = '<div class="spinner"></div> Đang xử lý...';
+            pollStatus();
+        } catch (err) {
+            showToast('Lỗi kết nối: ' + err.message, true);
+            resetBtn();
+        }
+    }
+
+    function resetBtn() {
+        const btn = document.getElementById('btnStart');
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Bắt đầu trích xuất';
+    }
+
+    async function pollStatus() {
+        if (!currentJobId) return;
+        try {
+            const resp = await fetch(`/api/status/${currentJobId}`);
+            const data = await resp.json();
+
+            const pct = data.total_files > 0
+                ? Math.round((data.processed_files / data.total_files) * 100) : 0;
+            document.getElementById('progressBar').style.width = pct + '%';
+            document.getElementById('progressText').textContent =
+                `${data.processed_files} / ${data.total_files} file (${pct}%)`;
+            document.getElementById('progressFile').textContent = data.current_file || '';
+
+            if (data.status === 'done') {
+                document.getElementById('progressSection').style.display = 'none';
+                resetBtn();
+                clearFiles(); // Reset toàn bộ file đã chọn để người dùng chọn đợt file tiếp theo
+                showResults(data.stats);
+                showToast(`Hoàn tất! Tìm thấy ${data.stats.total_sentences} câu.`);
+            } else {
+                setTimeout(pollStatus, 500);
+            }
+        } catch {
+            setTimeout(pollStatus, 1000);
+        }
+    }
+
+    // ========== Results ==========
+    function showResults(stats) {
+        document.getElementById('resultsSection').style.display = 'block';
+
+        // Stats cards
+        const statsGrid = document.getElementById('statsGrid');
+        let statsHTML = `
+            <div class="stat-card">
+                <div class="stat-number">${stats.total_sentences}</div>
+                <div class="stat-label">Tổng câu tìm thấy</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${Object.keys(stats.by_pattern).length}</div>
+                <div class="stat-label">Cấu trúc có kết quả</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${Object.keys(stats.by_year).length}</div>
+                <div class="stat-label">Số năm</div>
+            </div>
+        `;
+        // Year breakdown
+        for (const [year, count] of Object.entries(stats.by_year)) {
+            statsHTML += `
+                <div class="stat-card">
+                    <div class="stat-number">${count}</div>
+                    <div class="stat-label">Năm ${year}</div>
+                </div>
+            `;
+        }
+        statsGrid.innerHTML = statsHTML;
+
+        // Filter tabs
+        const filterTabs = document.getElementById('filterTabs');
+        let tabsHTML = `<div class="filter-tab active" onclick="filterBy('')">
+            Tất cả <span class="count">${stats.total_sentences}</span>
+        </div>`;
+        for (const [pat, count] of Object.entries(stats.by_pattern)) {
+            tabsHTML += `<div class="filter-tab" onclick="filterBy('${pat}')">
+                ${pat} <span class="count">${count}</span>
+            </div>`;
+        }
+        filterTabs.innerHTML = tabsHTML;
+
+        // Load first page
+        currentFilter = '';
+        currentPage = 1;
+        loadResults();
+    }
+
+    async function filterBy(pattern) {
+        currentFilter = pattern;
+        currentPage = 1;
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.textContent.includes(pattern || 'Tất cả'));
+        });
+        document.getElementById('btnDownloadFiltered').style.display = pattern ? 'inline-flex' : 'none';
+        loadResults();
+    }
+
+    async function loadResults() {
+        const params = new URLSearchParams({
+            page: currentPage,
+            per_page: 100,
+            pattern: currentFilter,
+        });
+        const resp = await fetch(`/api/results/${currentJobId}?${params}`);
+        const data = await resp.json();
+
+        document.getElementById('totalCount').textContent = data.total;
+
+        const tbody = document.getElementById('resultsBody');
+        let html = '';
+        data.results.forEach((r, idx) => {
+            const num = (currentPage - 1) * 100 + idx + 1;
+            // Highlight matched text in sentence
+            let sentence = escapeHtml(r.sentence_form);
+            if (r.matched_text) {
+                const escaped = escapeHtml(r.matched_text);
+                sentence = sentence.replace(escaped,
+                    `<span class="matched-highlight">${escaped}</span>`);
+            }
+            html += `<tr>
+                <td>${num}</td>
+                <td><span class="year-badge">${r.year}</span></td>
+                <td style="font-size:12px; color:#94a3b8;">${r.file}</td>
+                <td class="sentence-cell">${sentence}</td>
+                <td><span class="pattern-badge">${r.pattern_name}</span></td>
+                <td style="color:#fbbf24; font-weight:600; font-size:13px;">${escapeHtml(r.matched_text)}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; color:#64748b; padding:30px;">Không có kết quả</td></tr>';
+
+        // Pagination
+        const pag = document.getElementById('pagination');
+        if (data.total_pages > 1) {
+            pag.innerHTML = `
+                <button onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>← Trước</button>
+                <span class="page-info">Trang ${data.page} / ${data.total_pages}</span>
+                <button onclick="goPage(${currentPage + 1})" ${currentPage >= data.total_pages ? 'disabled' : ''}>Sau →</button>
+            `;
+        } else {
+            pag.innerHTML = '';
+        }
+    }
+
+    function goPage(p) { currentPage = p; loadResults(); }
+
+    function downloadExcel(pattern) {
+        const url = `/api/download/${currentJobId}?pattern=${encodeURIComponent(pattern || '')}`;
+        window.open(url, '_blank');
+    }
+
+    // ========== Utilities ==========
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showToast(msg, isError = false) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.className = 'toast' + (isError ? ' error' : '');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+</script>
+</body>
+</html>
+

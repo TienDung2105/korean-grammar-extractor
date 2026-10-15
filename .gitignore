@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+cloudflared.exe
+*.xlsx
+*.csv
+.DS_Store
+.venv/
+
